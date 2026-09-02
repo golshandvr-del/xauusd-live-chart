@@ -177,10 +177,22 @@
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (j.ok && j.candles && j.candles.length >= 2) {
+          // last item is today's forming candle -> use the one before it (yesterday's close)
           state.prevClose = j.candles[j.candles.length - 2].close;
+          if (state.lastPrice) renderChange(state.lastPrice);
         }
       })
       .catch(function () {});
+  }
+
+  function renderChange(price) {
+    if (!state.prevClose) return;
+    var diff = price - state.prevClose;
+    var pct = (diff / state.prevClose) * 100;
+    var ch = $('price-change');
+    ch.textContent = (diff >= 0 ? '+' : '') + fmt(diff, 2) +
+      ' (' + (diff >= 0 ? '+' : '') + pct.toFixed(2) + '%)';
+    ch.className = 'chg ' + (diff >= 0 ? 'up' : 'dn');
   }
 
   /* ---------------- levels ---------------- */
