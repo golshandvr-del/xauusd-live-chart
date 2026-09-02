@@ -135,13 +135,7 @@
     });
 
     // daily change vs. previous close from candles (1d)
-    if (state.prevClose) {
-      var diff = q.price - state.prevClose;
-      var pct = (diff / state.prevClose) * 100;
-      var ch = $('price-change');
-      ch.textContent = (diff >= 0 ? '+' : '') + fmt(diff, 2) + ' (' + (diff >= 0 ? '+' : '') + pct.toFixed(2) + '%)';
-      ch.className = 'chg ' + (diff >= 0 ? 'up' : 'dn');
-    }
+    renderChange(q.price);
 
     $('live-badge').classList.remove('stale');
     // live price marker on chart
