@@ -140,6 +140,16 @@
     renderChange(q.price);
 
     $('live-badge').classList.remove('stale');
+
+    // live-update the forming candle so the chart tracks spot in real time
+    if (state.series && state.lastCandle) {
+      var k = state.lastCandle;
+      k.close = q.price;
+      if (q.price > k.high) k.high = q.price;
+      if (q.price < k.low) k.low = q.price;
+      try { state.series.update(k); } catch (e) {}
+    }
+
     // live price marker on chart
     if (state.series) {
       try {
