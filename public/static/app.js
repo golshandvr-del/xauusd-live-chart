@@ -105,6 +105,7 @@
       .then(function (j) {
         if (!j.ok || !j.candles || !j.candles.length) throw new Error(j.error || 'no data');
         state.series.setData(j.candles);
+        state.lastCandle = Object.assign({}, j.candles[j.candles.length - 1]);
         if (fit) state.chart.timeScale().fitContent();
         $('chart-loading').classList.add('hide');
       })
