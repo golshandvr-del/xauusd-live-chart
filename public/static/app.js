@@ -14,6 +14,7 @@
     levels: [],
     lastPrice: null,
     prevClose: null,
+    lastCandle: null,        // live-updating last bar
     priceLines: {},          // id -> priceLine handle
     chart: null,
     series: null
