@@ -1,21 +1,107 @@
-```txt
+# XAUUSD Live Chart — قیمت لحظه‌ای طلا
+
+سایت موبایل‌محور برای نمایش قیمت **SPOT** طلا (XAU/USD) با نمودار کندلی، تعویض تایم‌فریم
+و ابزار ساده‌ی رسم خطوط حمایت و مقاومت.
+
+## Project Overview
+- **Name**: xauusd-live-chart
+- **Goal**: نمایش قیمت لحظه‌ای (spot) XAUUSD + نمودار قابل تعویض تایم‌فریم + مدیریت خطوط حمایت/مقاومت
+- **UI Language**: فارسی (RTL) — طراحی موبایل‌فرست
+
+## ✅ Completed Features
+1. **قیمت درشت لحظه‌ای** در بالای صفحه (spot)، با Bid/Ask، تغییر روزانه و زمان آخرین به‌روزرسانی
+   - رنگ قیمت با هر تیک سبز/قرمز می‌شود
+   - رفرش هر ۳ ثانیه
+2. **نمودار کندلی** (Lightweight Charts) با ۸ تایم‌فریم: `1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w`
+   - قابل زوم/درگ با انگشت (لمسی)
+   - **کندل آخر به‌صورت زنده با قیمت spot حرکت می‌کند** (مثل TradingView)
+   - خط نقطه‌چین طلایی روی قیمت فعلی
+3. **باکس افزودن خط حمایت/مقاومت** زیر نمودار
+   - ورود عدد → انتخاب نوع (حمایت/مقاومت) → یادداشت اختیاری → تأیید
+   - اعتبارسنجی عدد و جلوگیری از تکرار
+4. **لیست خطوط** زیر باکس
+   - نمایش نوع، قیمت، یادداشت و **فاصله از قیمت فعلی (دلار و درصد)**
+   - مرتب‌سازی نزولی (مقاومت‌های بالا → حمایت‌های پایین)
+   - حذف با یک کلیک
+   - **ذخیره در `localStorage`** — بعد از بستن مرورگر باقی می‌مانند
+5. **بدون هیچ ابزار اندیکاتور** — طبق درخواست، فقط خطوط افقی
+6. هیچ ابزار رسم اضافه‌ای وجود ندارد
+
+## 🎯 Price Accuracy (مقایسه با TradingView)
+منبع اصلی: **فید بین‌بانکی Swissquote** برای `XAU/USD` — همان قیمت spot که TradingView نشان می‌دهد.
+
+| منبع | قیمت نمونه |
+|---|---|
+| Swissquote spot XAU/USD (منبع ما) | 4375.79 |
+| gold-api.com XAU | 4375.60 |
+| OKX XAUT (طلای توکنیزه) | 4374.60 |
+
+اختلاف زیر ۱ دلار (فقط تفاوت spread/venue) ✅
+
+> ⚠️ عمداً از Yahoo `GC=F` استفاده **نشده** چون قیمت **فیوچرز COMEX** است و حدود ۵۰ دلار
+> بالاتر از spot معامله می‌شود.
+
+**Fallback chain**: Swissquote → gold-api.com → OKX XAUT ticker
+
+**کالیبراسیون نمودار**: کندل‌های OHLC از OKX XAUT گرفته می‌شوند، سپس با اختلاف
+(spot − آخرین close) شیفت می‌شوند تا نمودار دقیقاً روی قیمت spot بنشیند.
+اگر اختلاف بیش از ۴۰ دلار باشد (نشانه‌ی خرابی فید)، کالیبراسیون اعمال نمی‌شود.
+
+## API Endpoints
+| Method | Path | Params | Description |
+|---|---|---|---|
+| GET | `/` | — | صفحه‌ی اصلی |
+| GET | `/api/price` | — | قیمت spot: `{ok, symbol, bid, ask, price, ts, source}` |
+| GET | `/api/candles` | `tf` (1m…1w), `limit` (≤300) | کندل‌های کالیبره‌شده: `{ok, tf, spot, offset, candles[]}` |
+
+نمونه:
+```
+/api/price
+/api/candles?tf=1h&limit=300
+```
+
+## Data Architecture
+- **Data Models**
+  - `Quote`: `{ bid, ask, price, ts, source }`
+  - `Candle`: `{ time (unix sec), open, high, low, close }`
+  - `Level`: `{ id, price, type: 'support'|'resistance', note, at }`
+- **Storage**: خطوط حمایت/مقاومت در **`localStorage`** مرورگر (کلید `xau_levels_v1`) ذخیره می‌شوند.
+  هیچ دیتابیس سمت سرور لازم نیست — داده‌ها خصوصی و مخصوص دستگاه کاربر است.
+- **Data Flow**: مرورگر → Hono Worker (پروکسی + کالیبراسیون) → Swissquote / gold-api / OKX
+
+## User Guide
+1. **قیمت** بالای صفحه به‌طور خودکار هر ۳ ثانیه به‌روز می‌شود.
+2. برای تغییر تایم‌فریم، یکی از دکمه‌های `۱د / ۵د / ۱۵د / ۳۰د / ۱س / ۴س / ۱ر / ۱ه` را بزنید.
+3. برای افزودن خط:
+   - عدد قیمت را در کادر «قیمت» وارد کنید (مثلاً `4380.50`)
+   - نوع را انتخاب کنید: **حمایت** یا **مقاومت**
+   - در صورت تمایل یادداشت بنویسید
+   - روی **«تأیید و افزودن»** بزنید
+4. خط بلافاصله روی نمودار (سبز = حمایت، قرمز = مقاومت) و در لیست پایین ظاهر می‌شود.
+5. برای حذف، دکمه‌ی `×` کنار هر خط در لیست را بزنید.
+
+## Tech Stack
+- **Backend**: Hono 4 (Cloudflare Workers/Pages)
+- **Chart**: TradingView Lightweight Charts 4.1.3 (CDN)
+- **Font**: Vazirmatn (Google Fonts)
+- **Build**: Vite 8 + `@hono/vite-build/cloudflare-pages`
+
+## Local Development
+```bash
 npm install
-npm run dev
+npm run build
+pm2 start ecosystem.config.cjs      # http://localhost:3000
+curl http://localhost:3000/api/price
 ```
 
-```txt
-npm run deploy
-```
+## Deployment
+- **Platform**: Cloudflare Pages
+- **Status**: 🟡 در حال توسعه (آماده‌ی دیپلوی)
+- **GitHub**: https://github.com/golshandvr-del/xauusd-live-chart
 
-[For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
-
-```txt
-npm run cf-typegen
-```
-
-Pass the `CloudflareBindings` as generics when instantiation `Hono`:
-
-```ts
-// src/index.ts
-const app = new Hono<{ Bindings: CloudflareBindings }>()
-```
+## 🚧 Not Yet Implemented / Next Steps
+- دیپلوی به Cloudflare Pages (URL عمومی دائمی)
+- هشدار (alert) وقتی قیمت به یک خط می‌رسد
+- ویرایش قیمت یک خط موجود (فعلاً باید حذف و دوباره اضافه شود)
+- خروجی/ورودی JSON برای لیست خطوط
+- WebSocket به‌جای polling برای تیک‌های سریع‌تر
