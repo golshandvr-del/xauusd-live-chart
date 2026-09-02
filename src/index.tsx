@@ -46,9 +46,9 @@ async function fromSwissquote() {
   }
   if (!best) throw new Error('swissquote empty')
   return {
-    bid: best.bid,
-    ask: best.ask,
-    price: (best.bid + best.ask) / 2,
+    bid: +best.bid.toFixed(3),
+    ask: +best.ask.toFixed(3),
+    price: +((best.bid + best.ask) / 2).toFixed(3),
     ts: best.ts,
     source: 'Swissquote (Spot XAU/USD)'
   }
