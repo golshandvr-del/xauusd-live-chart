@@ -530,6 +530,7 @@
       if (!touch) return;
       touch = null;
       container.classList.remove('vzoom');
+      container.classList.remove('vpan');
     }
     container.addEventListener('touchend', endTouch, true);
     container.addEventListener('touchcancel', endTouch, true);
