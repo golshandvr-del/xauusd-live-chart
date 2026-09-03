@@ -253,6 +253,27 @@ body {
 
 .chart-src.proxy { color: var(--gold); }
 
+/* --- one-off hint telling the user the price bar is draggable --- */
+.chart-hint {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  z-index: 6;
+  max-width: calc(100% - 80px);
+  padding: 4px 9px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--tx2);
+  background: rgba(11, 14, 17, .88);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .6s ease;
+}
+
+.chart-hint.hide { opacity: 0; }
+
 /* ---------------- Cards ---------------- */
 .card {
   margin-top: 12px;
