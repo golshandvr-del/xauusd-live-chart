@@ -96,8 +96,13 @@
         vertTouchDrag: true
       },
       handleScale: {
-        axisPressedMouseMove: { time: true, price: true }, // <-- vertical zoom by dragging the price axis
-        axisDoubleClickReset: { time: true, price: true },
+        // IMPORTANT: the library's own price-axis scaling is disabled on
+        // purpose. We implement the vertical zoom ourselves (see
+        // installVerticalZoom). If both are enabled they each apply their own
+        // factor to the same drag, so the zoom lands squared and the chart
+        // collapses in one jump — that was the "sudden shrink" bug.
+        axisPressedMouseMove: { time: true, price: false },
+        axisDoubleClickReset: { time: true, price: false },
         mouseWheel: true,
         pinch: true
       },
