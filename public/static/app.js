@@ -367,6 +367,50 @@
       container.classList.remove('vzoom');
     }, true);
 
+    /* ============ drag the CHART BODY = pan both axes ============
+       The library pans the time axis on its own, but it never moves the price
+       axis, so the chart could be zoomed vertically yet not shifted up/down.
+       We add the vertical half here: the horizontal drag keeps flowing to the
+       library (we do NOT swallow the event), while we translate the vertical
+       component of the same drag into a price-range shift. */
+    var pan = null;
+
+    container.addEventListener('mousedown', function (e) {
+      if (inPriceAxis(e.clientX)) return;   // the axis has its own handler
+      if (e.button !== 0) return;
+      var vr = visibleRange();
+      if (!vr) return;
+      pan = {
+        y0: e.clientY,
+        top: vr.top,
+        bottom: vr.bottom,
+        h: vr.h,
+        moved: false
+      };
+      // NOTE: no preventDefault here — the library still needs this event
+      // to start its own horizontal pan.
+    }, false);
+
+    window.addEventListener('mousemove', function (e) {
+      if (!pan) return;
+      var dy = e.clientY - pan.y0;
+      if (!pan.moved) {
+        if (Math.abs(dy) < 2) return;       // ignore click jitter
+        pan.moved = true;
+        container.classList.add('vpan');
+      }
+      var span = pan.top - pan.bottom;
+      // drag down => look at higher prices (content follows the cursor)
+      var delta = (dy / pan.h) * span;
+      setPriceRange(pan.top + delta, pan.bottom + delta);
+    }, false);
+
+    window.addEventListener('mouseup', function () {
+      if (!pan) return;
+      pan = null;
+      container.classList.remove('vpan');
+    }, false);
+
     /* ================= wheel ================= */
     container.addEventListener('wheel', function (e) {
       var overAxis = inPriceAxis(e.clientX);
