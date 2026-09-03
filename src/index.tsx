@@ -629,7 +629,7 @@ app.get('/', (c) => {
         <button id="btn-zoom-in" class="tool-btn" title="زوم عمودی به داخل">＋</button>
         <button id="btn-zoom-out" class="tool-btn" title="زوم عمودی به بیرون">－</button>
       </div>
-      <div id="chart-hint" class="chart-hint">برای زوم عمودی، روی نوار قیمت (سمت راست) بکشید · دابل‌کلیک = اتو</div>
+      <div id="chart-hint" class="chart-hint">زوم عمودی: کشیدن روی نوار قیمت (راست) · جابجایی عمودی: کشیدن خود نمودار · دابل‌کلیک = اتو</div>
       <div id="chart-src" class="chart-src">—</div>
     </section>
 
