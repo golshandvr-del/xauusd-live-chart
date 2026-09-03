@@ -180,6 +180,10 @@ body {
 #chart.vzoom { cursor: ns-resize; }
 #chart.vzoom * { cursor: ns-resize !important; }
 
+/* dragging the chart body pans both axes */
+#chart.vpan { cursor: grabbing; }
+#chart.vpan * { cursor: grabbing !important; }
+
 /* hint strip over the right price axis so users know it is draggable */
 #chart-section::after {
   content: '';
