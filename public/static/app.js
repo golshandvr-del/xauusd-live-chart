@@ -404,7 +404,7 @@
       } else if (touch.kind === 'pinch' && e.touches.length === 2) {
         var d = Math.max(8, Math.abs(e.touches[0].clientY - e.touches[1].clientY));
         var f = touch.d0 / d;                 // fingers apart -> zoom in
-        f = Math.max(0.05, Math.min(20, f));
+        f = Math.max(0.3, Math.min(3, f));    // keep pinch in a sane band
         var c2 = (touch.top + touch.bottom) / 2;
         setPriceRange(
           c2 + (touch.top - c2) * f,
