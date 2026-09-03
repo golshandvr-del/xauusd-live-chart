@@ -93,7 +93,10 @@
         mouseWheel: true,
         pressedMouseMove: true,
         horzTouchDrag: true,
-        vertTouchDrag: true
+        // Our own touch handler owns vertical dragging (it pans the price
+        // axis). The library's vertTouchDrag only scrolls the TIME axis
+        // vertically, which would fight our gesture on mobile.
+        vertTouchDrag: false
       },
       handleScale: {
         // IMPORTANT: the library's own price-axis scaling is disabled on
