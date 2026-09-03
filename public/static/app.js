@@ -208,14 +208,47 @@
        data. The reliable hook is the series' autoscaleInfoProvider (installed
        above): while a custom range is set we report it as the series' price
        range, so the price scale renders exactly what we ask for. */
+    /* Zoom limits are derived from the DATA, not from absolute prices, so the
+       chart can never be squeezed into a meaningless sliver nor blown up until
+       the candles vanish into a flat line. */
+    function dataSpan() {
+      var arr = state.lastData;
+      if (!arr || !arr.length) return null;
+      var lo = Infinity, hi = -Infinity;
+      for (var i = 0; i < arr.length; i++) {
+        var k = arr[i];
+        if (!k) continue;
+        if (k.low < lo) lo = k.low;
+        if (k.high > hi) hi = k.high;
+      }
+      if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return null;
+      return hi - lo;
+    }
+
     function setPriceRange(top, bottom) {
       if (!(isFinite(top) && isFinite(bottom)) || top <= bottom) return;
-      var span = top - bottom;
-      if (span < 0.05) return;         // guard: absurdly deep zoom
-      if (span > 500000) return;       // guard: absurdly wide zoom
 
-      state.customRange = { top: top, bottom: bottom };
+      var span = top - bottom;
+      var center = (top + bottom) / 2;
+
+      // clamp the span against the data extent: at most 8x wider (zoomed out)
+      // and at least 1/50 of it (zoomed in). This is what keeps the gesture
+      // stable instead of letting a fast drag collapse the whole chart.
+      var ds = dataSpan();
+      if (ds) {
+        var maxSpan = ds * 8;
+        var minSpan = Math.max(ds / 50, 0.02);
+        if (span > maxSpan) span = maxSpan;
+        if (span < minSpan) span = minSpan;
+      } else {
+        if (span < 0.02) span = 0.02;
+        if (span > 500000) span = 500000;
+      }
+
+      var half = span / 2;
+      state.customRange = { top: center + half, bottom: center - half };
       state.autoScale = false;
+
       try {
         ps.applyOptions({ autoScale: true, scaleMargins: { top: 0, bottom: 0 } });
         ps.setAutoScale(true);         // force an immediate recompute
