@@ -139,6 +139,9 @@
       }
     });
 
+    // introspection handle for the automated checks (harmless in production)
+    window.__xauTs = state.chart.timeScale();
+
     installVerticalZoom(el);
 
     window.addEventListener('resize', function () {
