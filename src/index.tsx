@@ -493,10 +493,11 @@ app.get('/api/candles', async (c) => {
   const spot = q && q.spot ? q.price : q ? q.price : null
 
   const attempts: Array<() => Promise<Series>> = [
-    () => yahooCandles(tf, 'XAUUSD=X', 'Yahoo Spot XAU/USD', true),
-    () => yahooCandles(tf, 'GC=F', 'COMEX Gold Futures (GC)', true),
-    () => bitgetCandles(tf, limit),
-    () => okxCandles(tf, limit)
+    () => fxopenCandles(tf, limit),                                      // real spot XAU/USD
+    () => yahooCandles(tf, 'XAUUSD=X', 'Yahoo Spot XAU/USD', true),      // real spot XAU/USD
+    () => yahooCandles(tf, 'GC=F', 'COMEX Gold Futures (GC)', true),     // real gold futures
+    () => bitgetCandles(tf, limit),                                      // proxy, calibrated
+    () => okxCandles(tf, limit)                                          // proxy, calibrated
   ]
 
   const errors: string[] = []
