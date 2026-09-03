@@ -1,5 +1,6 @@
 /* =========================================================
    XAUUSD live spot + chart + support/resistance levels
+   TradingView-style vertical (price-axis) zoom
    ========================================================= */
 (function () {
   'use strict';
@@ -15,9 +16,11 @@
     lastPrice: null,
     prevClose: null,
     lastCandle: null,        // live-updating last bar
+    barSeconds: 3600,
     priceLines: {},          // id -> priceLine handle
     chart: null,
-    series: null
+    series: null,
+    autoScale: true          // false once the user zooms/pans vertically
   };
 
   /* ---------------- helpers ---------------- */
@@ -62,22 +65,41 @@
       },
       rightPriceScale: {
         borderColor: '#232c37',
-        scaleMargins: { top: 0.12, bottom: 0.12 }
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+        // TradingView-like price axis behaviour
+        autoScale: true,
+        mode: LightweightCharts.PriceScaleMode.Normal,
+        alignLabels: true,
+        entireTextOnly: false
       },
       timeScale: {
         borderColor: '#232c37',
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 4,
-        barSpacing: 6
+        rightOffset: 6,
+        barSpacing: 6,
+        minBarSpacing: 0.5,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true
       },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
         vertLine: { color: '#4b5666', labelBackgroundColor: '#2a3441' },
         horzLine: { color: '#4b5666', labelBackgroundColor: '#2a3441' }
       },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+      // vertical drag/scroll on the price scale + pane, like TradingView
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true
+      },
+      handleScale: {
+        axisPressedMouseMove: { time: true, price: true }, // <-- vertical zoom by dragging the price axis
+        axisDoubleClickReset: { time: true, price: true },
+        mouseWheel: true,
+        pinch: true
+      },
       localization: {
         priceFormatter: function (p) { return Number(p).toFixed(2); }
       }
@@ -90,8 +112,15 @@
       borderDownColor: '#e2544c',
       wickUpColor: '#26a37b',
       wickDownColor: '#e2544c',
-      priceFormat: { type: 'price', precision: 2, minMove: 0.01 }
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+      priceLineVisible: true,
+      priceLineColor: '#f0b90b',
+      priceLineWidth: 1,
+      priceLineStyle: LightweightCharts.LineStyle.Dotted,
+      lastValueVisible: true
     });
+
+    installVerticalZoom(el);
 
     window.addEventListener('resize', function () {
       if (!state.chart) return;
@@ -99,14 +128,315 @@
     });
   }
 
+  /* -----------------------------------------------------------------
+     Vertical zoom, TradingView style.
+
+     The library's own axisPressedMouseMove works on desktop, but it is
+     unreliable on touch and gives no feedback. So we implement an explicit
+     price-axis gesture on top of it:
+
+       • drag vertically on the right price bar  -> zoom the price range
+       • wheel over the price bar               -> zoom the price range
+       • pinch vertically on the price bar      -> zoom the price range
+       • double-click / double-tap the price bar-> back to auto scale
+       • Shift + wheel anywhere on the chart    -> zoom the price range
+     ----------------------------------------------------------------- */
+  function installVerticalZoom(container) {
+    var priceScaleWidth = 56; // px reserved for the right price axis hit area
+    var ps = state.chart.priceScale('right');
+
+    function inPriceAxis(clientX) {
+      var rect = container.getBoundingClientRect();
+      // RTL page, but lightweight-charts keeps the right price scale on the right edge
+      return clientX >= rect.right - priceScaleWidth;
+    }
+
+    /* ---- read the currently visible price range ---- */
+    function visibleRange() {
+      var h = container.clientHeight;
+      if (!h) return null;
+      var top = state.series.coordinateToPrice(0);
+      var bottom = state.series.coordinateToPrice(h);
+      if (top === null || bottom === null) return null;
+      if (!isFinite(top) || !isFinite(bottom)) return null;
+      return { top: Math.max(top, bottom), bottom: Math.min(top, bottom) };
+    }
+
+    /* ---- apply an explicit price range by manipulating scaleMargins ----
+       lightweight-charts v4 has no public setVisiblePriceRange for a series,
+       so we translate the wanted range into autoScale:false + margins that
+       reproduce it against the series' own data extent. This is exactly what
+       gives a stable, TradingView-like feel. */
+    function dataExtent() {
+      if (!state.lastData || !state.lastData.length) return null;
+      var lo = Infinity, hi = -Infinity;
+      // use the visible slice only, so zoom feels local like TradingView
+      var vr = state.chart.timeScale().getVisibleLogicalRange();
+      var arr = state.lastData;
+      var from = 0, to = arr.length - 1;
+      if (vr) {
+        from = Math.max(0, Math.floor(vr.from));
+        to = Math.min(arr.length - 1, Math.ceil(vr.to));
+      }
+      for (var i = from; i <= to; i++) {
+        var k = arr[i];
+        if (!k) continue;
+        if (k.low < lo) lo = k.low;
+        if (k.high > hi) hi = k.high;
+      }
+      if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return null;
+      return { lo: lo, hi: hi };
+    }
+
+    function setPriceRange(top, bottom) {
+      var ext = dataExtent();
+      if (!ext) return;
+      if (!(isFinite(top) && isFinite(bottom)) || top <= bottom) return;
+
+      var span = top - bottom;
+      var dataSpan = ext.hi - ext.lo;
+      if (dataSpan <= 0) return;
+
+      // margins are fractions of the pane height, relative to the data extent
+      var topMargin = (top - ext.hi) / span;
+      var bottomMargin = (ext.lo - bottom) / span;
+
+      // clamp so the chart never becomes unusable
+      topMargin = Math.max(-0.45, Math.min(0.9, topMargin));
+      bottomMargin = Math.max(-0.45, Math.min(0.9, bottomMargin));
+      if (topMargin + bottomMargin > 0.95) {
+        var s = 0.95 / (topMargin + bottomMargin);
+        topMargin *= s;
+        bottomMargin *= s;
+      }
+
+      state.autoScale = false;
+      ps.applyOptions({
+        autoScale: false,
+        scaleMargins: { top: topMargin, bottom: bottomMargin }
+      });
+      markAuto();
+    }
+
+    /* ---- zoom around a focus price ---- */
+    function zoomBy(factor, focusPrice) {
+      var vr = visibleRange();
+      if (!vr) return;
+      var center = (focusPrice === undefined || focusPrice === null || !isFinite(focusPrice))
+        ? (vr.top + vr.bottom) / 2
+        : focusPrice;
+      var newTop = center + (vr.top - center) * factor;
+      var newBottom = center - (center - vr.bottom) * factor;
+      setPriceRange(newTop, newBottom);
+    }
+
+    /* ---- pan vertically ---- */
+    function panBy(priceDelta) {
+      var vr = visibleRange();
+      if (!vr) return;
+      setPriceRange(vr.top + priceDelta, vr.bottom + priceDelta);
+    }
+
+    window.__xauZoom = { zoomBy: zoomBy, panBy: panBy, reset: resetAuto };
+
+    /* ================= mouse drag on the price axis ================= */
+    var drag = null;
+
+    container.addEventListener('mousedown', function (e) {
+      if (!inPriceAxis(e.clientX)) return;
+      var vr = visibleRange();
+      if (!vr) return;
+      drag = {
+        y0: e.clientY,
+        top: vr.top,
+        bottom: vr.bottom,
+        h: container.clientHeight,
+        shift: e.shiftKey || e.ctrlKey || e.metaKey
+      };
+      container.classList.add('vzoom');
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+
+    window.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      var dy = e.clientY - drag.y0;
+      var span = drag.top - drag.bottom;
+
+      if (drag.shift) {
+        // shift-drag = pan vertically
+        var priceDelta = (dy / drag.h) * span;
+        setPriceRange(drag.top + priceDelta, drag.bottom + priceDelta);
+      } else {
+        // drag DOWN  => compress (zoom out) — same direction as TradingView
+        // drag UP    => expand  (zoom in)
+        var factor = Math.exp(dy / (drag.h * 0.45));
+        factor = Math.max(0.05, Math.min(20, factor));
+        var center = (drag.top + drag.bottom) / 2;
+        setPriceRange(
+          center + (drag.top - center) * factor,
+          center - (center - drag.bottom) * factor
+        );
+      }
+      e.preventDefault();
+    }, true);
+
+    window.addEventListener('mouseup', function () {
+      if (!drag) return;
+      drag = null;
+      container.classList.remove('vzoom');
+    }, true);
+
+    /* ================= wheel ================= */
+    container.addEventListener('wheel', function (e) {
+      var overAxis = inPriceAxis(e.clientX);
+      if (!overAxis && !e.shiftKey) return;   // let the library do horizontal zoom
+      var rect = container.getBoundingClientRect();
+      var focus = state.series.coordinateToPrice(e.clientY - rect.top);
+      var factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+      zoomBy(factor, focus);
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    /* ================= touch: drag + vertical pinch ================= */
+    var touch = null;
+
+    container.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 1) {
+        var t = e.touches[0];
+        if (!inPriceAxis(t.clientX)) return;
+        var vr = visibleRange();
+        if (!vr) return;
+        touch = {
+          kind: 'drag',
+          y0: t.clientY,
+          top: vr.top,
+          bottom: vr.bottom,
+          h: container.clientHeight
+        };
+        container.classList.add('vzoom');
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (e.touches.length === 2) {
+        var a = e.touches[0], b = e.touches[1];
+        var dy = Math.abs(a.clientY - b.clientY);
+        var dx = Math.abs(a.clientX - b.clientX);
+        // only hijack clearly-vertical pinches; horizontal pinch stays with the lib
+        if (dy < dx * 1.2) return;
+        var vr2 = visibleRange();
+        if (!vr2) return;
+        touch = {
+          kind: 'pinch',
+          d0: Math.max(8, dy),
+          top: vr2.top,
+          bottom: vr2.bottom
+        };
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, { passive: false, capture: true });
+
+    container.addEventListener('touchmove', function (e) {
+      if (!touch) return;
+      if (touch.kind === 'drag' && e.touches.length === 1) {
+        var dy = e.touches[0].clientY - touch.y0;
+        var factor = Math.exp(dy / (touch.h * 0.45));
+        factor = Math.max(0.05, Math.min(20, factor));
+        var center = (touch.top + touch.bottom) / 2;
+        setPriceRange(
+          center + (touch.top - center) * factor,
+          center - (center - touch.bottom) * factor
+        );
+        e.preventDefault();
+      } else if (touch.kind === 'pinch' && e.touches.length === 2) {
+        var d = Math.max(8, Math.abs(e.touches[0].clientY - e.touches[1].clientY));
+        var f = touch.d0 / d;                 // fingers apart -> zoom in
+        f = Math.max(0.05, Math.min(20, f));
+        var c2 = (touch.top + touch.bottom) / 2;
+        setPriceRange(
+          c2 + (touch.top - c2) * f,
+          c2 - (c2 - touch.bottom) * f
+        );
+        e.preventDefault();
+      }
+    }, { passive: false, capture: true });
+
+    function endTouch() {
+      if (!touch) return;
+      touch = null;
+      container.classList.remove('vzoom');
+    }
+    container.addEventListener('touchend', endTouch, true);
+    container.addEventListener('touchcancel', endTouch, true);
+
+    /* ================= double click / double tap = auto scale ================= */
+    container.addEventListener('dblclick', function (e) {
+      if (!inPriceAxis(e.clientX)) return;
+      resetAuto();
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+
+    var lastTap = 0;
+    container.addEventListener('touchend', function (e) {
+      var t = e.changedTouches && e.changedTouches[0];
+      if (!t || !inPriceAxis(t.clientX)) return;
+      var now = Date.now();
+      if (now - lastTap < 320) { resetAuto(); e.preventDefault(); }
+      lastTap = now;
+    }, true);
+  }
+
+  function resetAuto() {
+    state.autoScale = true;
+    try {
+      state.chart.priceScale('right').applyOptions({
+        autoScale: true,
+        scaleMargins: { top: 0.12, bottom: 0.12 }
+      });
+    } catch (e) {}
+    markAuto();
+  }
+
+  function markAuto() {
+    var b = $('btn-autoscale');
+    if (!b) return;
+    b.classList.toggle('on', !!state.autoScale);
+    b.textContent = state.autoScale ? 'اتو' : 'دستی';
+  }
+
+  /* ---------------- candles ---------------- */
   function loadCandles(fit) {
-    return fetch('/api/candles?tf=' + encodeURIComponent(state.tf) + '&limit=300', { cache: 'no-store' })
+    return fetch('/api/candles?tf=' + encodeURIComponent(state.tf) + '&limit=600', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok || !j.candles || !j.candles.length) throw new Error(j.error || 'no data');
+
+        // keep the user's horizontal view when this is a background refresh
+        var keepRange = null;
+        if (!fit) {
+          try { keepRange = state.chart.timeScale().getVisibleLogicalRange(); } catch (e) {}
+        }
+
+        state.lastData = j.candles;
+        state.barSeconds = j.barSeconds || state.barSeconds;
         state.series.setData(j.candles);
         state.lastCandle = Object.assign({}, j.candles[j.candles.length - 1]);
-        if (fit) state.chart.timeScale().fitContent();
+
+        if (fit) {
+          state.chart.timeScale().fitContent();
+        } else if (keepRange) {
+          try { state.chart.timeScale().setVisibleLogicalRange(keepRange); } catch (e) {}
+        }
+
+        var src = $('chart-src');
+        if (src) {
+          src.textContent = (j.source || '—') +
+            (j.proxy ? ' · کالیبره ×' + (j.calibration || 1) : ' · فید واقعی');
+          src.classList.toggle('proxy', !!j.proxy);
+        }
+
         $('chart-loading').classList.add('hide');
       })
       .catch(function (e) {
@@ -136,32 +466,37 @@
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
 
-    // daily change vs. previous close from candles (1d)
     renderChange(q.price);
-
     $('live-badge').classList.remove('stale');
 
-    // live-update the forming candle so the chart tracks spot in real time
+    // live-update the forming candle so the chart tracks spot in real time,
+    // and roll a brand-new bar when the timeframe bucket changes
     if (state.series && state.lastCandle) {
+      var sec = state.barSeconds || 3600;
+      var bucket = Math.floor(Date.now() / 1000 / sec) * sec;
       var k = state.lastCandle;
-      k.close = q.price;
-      if (q.price > k.high) k.high = q.price;
-      if (q.price < k.low) k.low = q.price;
+
+      if (bucket > k.time) {
+        k = {
+          time: bucket,
+          open: k.close,
+          high: Math.max(k.close, q.price),
+          low: Math.min(k.close, q.price),
+          close: q.price
+        };
+        state.lastCandle = k;
+        if (state.lastData) state.lastData.push(k);
+      } else {
+        k.close = q.price;
+        if (q.price > k.high) k.high = q.price;
+        if (q.price < k.low) k.low = q.price;
+        if (state.lastData && state.lastData.length) {
+          state.lastData[state.lastData.length - 1] = k;
+        }
+      }
       try { state.series.update(k); } catch (e) {}
     }
 
-    // live price marker on chart
-    if (state.series) {
-      try {
-        state.series.applyOptions({
-          priceLineVisible: true,
-          priceLineColor: '#f0b90b',
-          priceLineWidth: 1,
-          priceLineStyle: LightweightCharts.LineStyle.Dotted,
-          lastValueVisible: true
-        });
-      } catch (e) {}
-    }
     renderList(); // update distances
   }
 
@@ -179,11 +514,10 @@
   }
 
   function loadPrevClose() {
-    fetch('/api/candles?tf=1d&limit=3', { cache: 'no-store' })
+    fetch('/api/candles?tf=1d&limit=5', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (j.ok && j.candles && j.candles.length >= 2) {
-          // last item is today's forming candle -> use the one before it (yesterday's close)
           state.prevClose = j.candles[j.candles.length - 2].close;
           if (state.lastPrice) renderChange(state.lastPrice);
         }
@@ -249,7 +583,6 @@
     }
     empty.classList.add('hide');
 
-    // resistance first (high -> low), then support (high -> low)
     var sorted = state.levels.slice().sort(function (a, b) { return b.price - a.price; });
 
     box.innerHTML = sorted.map(function (lv) {
@@ -335,6 +668,7 @@
         state.tf = btn.getAttribute('data-tf');
         $('chart-loading').textContent = 'در حال بارگذاری نمودار…';
         $('chart-loading').classList.remove('hide');
+        resetAuto();
         loadCandles(true).then(redrawAllLevels);
       });
     });
@@ -346,6 +680,35 @@
         btn.classList.add('active');
         state.type = btn.getAttribute('data-type');
       });
+    });
+
+    // chart tools
+    var bAuto = $('btn-autoscale');
+    if (bAuto) bAuto.addEventListener('click', resetAuto);
+
+    var bFit = $('btn-fit');
+    if (bFit) bFit.addEventListener('click', function () {
+      state.chart.timeScale().fitContent();
+      resetAuto();
+    });
+
+    var bIn = $('btn-zoom-in');
+    if (bIn) bIn.addEventListener('click', function () {
+      if (window.__xauZoom) window.__xauZoom.zoomBy(1 / 1.3);
+    });
+
+    var bOut = $('btn-zoom-out');
+    if (bOut) bOut.addEventListener('click', function () {
+      if (window.__xauZoom) window.__xauZoom.zoomBy(1.3);
+    });
+
+    // keyboard: up/down = vertical zoom, 0 = reset
+    document.addEventListener('keydown', function (e) {
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if (!window.__xauZoom) return;
+      if (e.key === 'ArrowUp') { window.__xauZoom.zoomBy(1 / 1.2); e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { window.__xauZoom.zoomBy(1.2); e.preventDefault(); }
+      else if (e.key === '0') { window.__xauZoom.reset(); }
     });
 
     $('level-add').addEventListener('click', addLevel);
@@ -363,6 +726,7 @@
     initChart();
     bindEvents();
     renderList();
+    markAuto();
 
     loadCandles(true).then(redrawAllLevels);
     loadPrevClose();
