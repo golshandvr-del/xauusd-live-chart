@@ -174,6 +174,97 @@ app.get('/api/price', async (c) => {
  *  Priority: real SPOT XAU/USD OHLC  ->  tokenized-gold proxy
  * ================================================================== */
 
+/* ---- FXOpen public quote history: REAL broker spot XAU/USD OHLC ----
+   This is the accuracy fix. Previously the chart was drawn from tokenized
+   gold (XAUT-USDT) and shifted by an additive offset, which distorted every
+   historical bar. FXOpen publishes genuine XAU/USD bid/ask bars, correctly
+   aligned to UTC, for every timeframe the UI offers. */
+const FXO_MAP: Record<string, string> = {
+  '1m': 'M1',
+  '5m': 'M5',
+  '15m': 'M15',
+  '30m': 'M30',
+  '1h': 'H1',
+  '4h': 'H4',
+  '1d': 'D1',
+  '1w': 'W1'
+}
+
+const FXO_HOSTS = [
+  'https://marginalttdemowebapi.fxopen.net',
+  'https://marginalttlivewebapi.fxopen.net'
+]
+
+async function fxopenBars(tf: string, limit: number, side: 'bid' | 'ask') {
+  const p = FXO_MAP[tf]
+  if (!p) throw new Error('fxopen bad tf')
+  const n = Math.min(Math.max(limit, 50), 1000)
+  const ts = Date.now()
+  let lastErr: any = null
+  for (const host of FXO_HOSTS) {
+    try {
+      const r = await fetch(
+        `${host}/api/v1/public/quotehistory/XAUUSD/${p}/bars/${side}?count=-${n}&timestamp=${ts}`,
+        {
+          headers: { 'User-Agent': UA, Accept: 'application/json' },
+          cf: { cacheTtl: 15, cacheEverything: true } as any
+        }
+      )
+      if (!r.ok) throw new Error('fxopen ' + r.status)
+      const j: any = await r.json()
+      const bars: any[] = j?.Bars ?? []
+      if (!bars.length) throw new Error('fxopen empty')
+      return bars
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr ?? new Error('fxopen failed')
+}
+
+/** Mid-price bars: average the bid and ask books, exactly like a broker chart. */
+async function fxopenCandles(tf: string, limit: number): Promise<Series> {
+  const bid = await fxopenBars(tf, limit, 'bid')
+
+  let ask: any[] | null = null
+  try {
+    ask = await fxopenBars(tf, limit, 'ask')
+  } catch {
+    /* mid is optional — bid-only is still a genuine spot series */
+  }
+
+  const askByTs = new Map<number, any>()
+  if (ask) for (const b of ask) askByTs.set(Number(b.Timestamp), b)
+
+  const candles: Candle[] = []
+  for (const b of bid) {
+    const t = Number(b.Timestamp)
+    const a = askByTs.get(t)
+    const mid = (x: number, y: number | undefined) =>
+      Number.isFinite(y as number) ? (x + (y as number)) / 2 : x
+    const o = mid(Number(b.Open), a ? Number(a.Open) : undefined)
+    const h = mid(Number(b.High), a ? Number(a.High) : undefined)
+    const l = mid(Number(b.Low), a ? Number(a.Low) : undefined)
+    const cl = mid(Number(b.Close), a ? Number(a.Close) : undefined)
+    if (![o, h, l, cl].every(Number.isFinite)) continue
+    candles.push({
+      time: Math.floor(t / 1000),
+      open: +o.toFixed(2),
+      high: +h.toFixed(2),
+      low: +l.toFixed(2),
+      close: +cl.toFixed(2)
+    })
+  }
+  if (!candles.length) throw new Error('fxopen no valid bars')
+  return {
+    candles,
+    source: ask
+      ? 'FXOpen Spot XAU/USD (mid)'
+      : 'FXOpen Spot XAU/USD (bid)',
+    proxy: false
+  }
+}
+
 /* ---- Yahoo Finance: genuine spot XAU/USD (XAUUSD=X) ---- */
 const YF_MAP: Record<string, { interval: string; range: string; agg?: number }> = {
   '1m': { interval: '1m', range: '5d' },
