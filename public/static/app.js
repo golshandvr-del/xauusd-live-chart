@@ -20,7 +20,8 @@
     priceLines: {},          // id -> priceLine handle
     chart: null,
     series: null,
-    autoScale: true          // false once the user zooms/pans vertically
+    autoScale: true,         // false once the user zooms/pans vertically
+    customRange: null        // { top, bottom } while vertically zoomed
   };
 
   /* ---------------- helpers ---------------- */
@@ -117,7 +118,20 @@
       priceLineColor: '#f0b90b',
       priceLineWidth: 1,
       priceLineStyle: LightweightCharts.LineStyle.Dotted,
-      lastValueVisible: true
+      lastValueVisible: true,
+      // The hook that makes vertical zoom possible: while the user has zoomed
+      // the price axis we report our own range instead of the data extent.
+      autoscaleInfoProvider: function (original) {
+        if (state.customRange) {
+          return {
+            priceRange: {
+              minValue: state.customRange.bottom,
+              maxValue: state.customRange.top
+            }
+          };
+        }
+        return original();
+      }
     });
 
     installVerticalZoom(el);
@@ -162,59 +176,24 @@
       return { top: Math.max(top, bottom), bottom: Math.min(top, bottom) };
     }
 
-    /* ---- apply an explicit price range by manipulating scaleMargins ----
-       lightweight-charts v4 has no public setVisiblePriceRange for a series,
-       so we translate the wanted range into autoScale:false + margins that
-       reproduce it against the series' own data extent. This is exactly what
-       gives a stable, TradingView-like feel. */
-    function dataExtent() {
-      if (!state.lastData || !state.lastData.length) return null;
-      var lo = Infinity, hi = -Infinity;
-      // use the visible slice only, so zoom feels local like TradingView
-      var vr = state.chart.timeScale().getVisibleLogicalRange();
-      var arr = state.lastData;
-      var from = 0, to = arr.length - 1;
-      if (vr) {
-        from = Math.max(0, Math.floor(vr.from));
-        to = Math.min(arr.length - 1, Math.ceil(vr.to));
-      }
-      for (var i = from; i <= to; i++) {
-        var k = arr[i];
-        if (!k) continue;
-        if (k.low < lo) lo = k.low;
-        if (k.high > hi) hi = k.high;
-      }
-      if (!isFinite(lo) || !isFinite(hi) || hi <= lo) return null;
-      return { lo: lo, hi: hi };
-    }
-
+    /* ---- apply an explicit price range ----
+       lightweight-charts v4 exposes no setVisiblePriceRange, and scaleMargins
+       are rejected when negative — so margins alone can never zoom INTO the
+       data. The reliable hook is the series' autoscaleInfoProvider (installed
+       above): while a custom range is set we report it as the series' price
+       range, so the price scale renders exactly what we ask for. */
     function setPriceRange(top, bottom) {
-      var ext = dataExtent();
-      if (!ext) return;
       if (!(isFinite(top) && isFinite(bottom)) || top <= bottom) return;
-
       var span = top - bottom;
-      var dataSpan = ext.hi - ext.lo;
-      if (dataSpan <= 0) return;
+      if (span < 0.05) return;         // guard: absurdly deep zoom
+      if (span > 500000) return;       // guard: absurdly wide zoom
 
-      // margins are fractions of the pane height, relative to the data extent
-      var topMargin = (top - ext.hi) / span;
-      var bottomMargin = (ext.lo - bottom) / span;
-
-      // clamp so the chart never becomes unusable
-      topMargin = Math.max(-0.45, Math.min(0.9, topMargin));
-      bottomMargin = Math.max(-0.45, Math.min(0.9, bottomMargin));
-      if (topMargin + bottomMargin > 0.95) {
-        var s = 0.95 / (topMargin + bottomMargin);
-        topMargin *= s;
-        bottomMargin *= s;
-      }
-
+      state.customRange = { top: top, bottom: bottom };
       state.autoScale = false;
-      ps.applyOptions({
-        autoScale: false,
-        scaleMargins: { top: topMargin, bottom: bottomMargin }
-      });
+      try {
+        ps.applyOptions({ autoScale: true, scaleMargins: { top: 0, bottom: 0 } });
+        ps.setAutoScale(true);         // force an immediate recompute
+      } catch (e) {}
       markAuto();
     }
 
@@ -390,11 +369,14 @@
 
   function resetAuto() {
     state.autoScale = true;
+    state.customRange = null;
     try {
-      state.chart.priceScale('right').applyOptions({
+      var ps = state.chart.priceScale('right');
+      ps.applyOptions({
         autoScale: true,
         scaleMargins: { top: 0.12, bottom: 0.12 }
       });
+      ps.setAutoScale(true);
     } catch (e) {}
     markAuto();
   }
