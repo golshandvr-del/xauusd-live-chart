@@ -256,6 +256,19 @@
       markAuto();
     }
 
+    /* ---- drag -> zoom factor ----
+       A gentle, near-linear response instead of the old exp(dy/0.45h), which
+       reached 9x within half a pane and made the chart appear to shrink in one
+       jump. Dragging a full pane height now changes the range by 2.5x at most,
+       which is what TradingView feels like. */
+    function dragFactor(dy, h) {
+      if (!h) return 1;
+      var t = dy / h;                          // -1 .. +1 over one pane
+      t = Math.max(-1.5, Math.min(1.5, t));    // ignore runaway drags
+      var f = 1 + t * 1.5;                     // down => >1 (out), up => <1 (in)
+      return Math.max(0.25, Math.min(2.5, f));
+    }
+
     /* ---- zoom around a focus price ---- */
     function zoomBy(factor, focusPrice) {
       var vr = visibleRange();
