@@ -624,11 +624,12 @@ app.get('/', (c) => {
       <div id="chart"></div>
       <div id="chart-loading">در حال بارگذاری نمودار…</div>
       <div id="chart-tools">
-        <button id="btn-autoscale" class="tool-btn" title="مقیاس خودکار عمودی">اتو</button>
+        <button id="btn-autoscale" class="tool-btn" title="مقیاس خودکار عمودی (دابل‌کلیک روی نوار قیمت هم همین کار را می‌کند)">اتو</button>
         <button id="btn-fit" class="tool-btn" title="نمایش کل داده‌ها">تنظیم</button>
-        <button id="btn-zoom-in" class="tool-btn" title="زوم عمودی +">＋</button>
-        <button id="btn-zoom-out" class="tool-btn" title="زوم عمودی −">－</button>
+        <button id="btn-zoom-in" class="tool-btn" title="زوم عمودی به داخل">＋</button>
+        <button id="btn-zoom-out" class="tool-btn" title="زوم عمودی به بیرون">－</button>
       </div>
+      <div id="chart-hint" class="chart-hint">برای زوم عمودی، روی نوار قیمت (سمت راست) بکشید · دابل‌کلیک = اتو</div>
       <div id="chart-src" class="chart-src">—</div>
     </section>
 
