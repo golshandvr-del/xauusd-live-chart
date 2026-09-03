@@ -176,7 +176,10 @@ body {
 #chart-loading.hide { opacity: 0; pointer-events: none; }
 
 /* --- price-axis vertical zoom affordance --- */
-#chart { touch-action: pan-y; }
+/* 'none' hands every touch gesture to our JS handlers; with pan-y the browser
+   would claim vertical drags for page scrolling and the chart could not be
+   moved up/down at all on mobile. */
+#chart { touch-action: none; }
 #chart.vzoom { cursor: ns-resize; }
 #chart.vzoom * { cursor: ns-resize !important; }
 
