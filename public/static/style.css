@@ -175,6 +175,84 @@ body {
 
 #chart-loading.hide { opacity: 0; pointer-events: none; }
 
+/* --- price-axis vertical zoom affordance --- */
+#chart { touch-action: pan-y; }
+#chart.vzoom { cursor: ns-resize; }
+#chart.vzoom * { cursor: ns-resize !important; }
+
+/* hint strip over the right price axis so users know it is draggable */
+#chart-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 56px;
+  height: 340px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(240, 185, 11, 0), rgba(240, 185, 11, .05));
+  opacity: 0;
+  transition: opacity .2s;
+}
+#chart-section:hover::after { opacity: 1; }
+
+/* --- chart tool buttons --- */
+#chart-tools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+}
+
+.tool-btn {
+  min-width: 30px;
+  height: 26px;
+  padding: 0 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tx2);
+  background: rgba(11, 14, 17, .72);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: color .15s, border-color .15s, background .15s;
+}
+
+.tool-btn:hover {
+  color: var(--tx);
+  border-color: #3a4椀650;
+  border-color: #3a4650;
+}
+
+.tool-btn:active { transform: scale(.94); }
+
+.tool-btn.on {
+  color: var(--gold);
+  border-color: rgba(240, 185, 11, .45);
+  background: rgba(240, 185, 11, .1);
+}
+
+/* --- data-source ribbon --- */
+.chart-src {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  z-index: 5;
+  padding: 2px 7px;
+  font-size: 10px;
+  color: var(--up);
+  background: rgba(11, 14, 17, .7);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  pointer-events: none;
+  direction: ltr;
+}
+
+.chart-src.proxy { color: var(--gold); }
+
 /* ---------------- Cards ---------------- */
 .card {
   margin-top: 12px;
