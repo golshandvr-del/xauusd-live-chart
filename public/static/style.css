@@ -237,7 +237,8 @@ body {
 /* --- data-source ribbon --- */
 .chart-src {
   position: absolute;
-  bottom: 6px;
+  /* sit above the time axis (~28px) instead of overlapping the date labels */
+  bottom: 36px;
   left: 8px;
   z-index: 5;
   padding: 2px 7px;
