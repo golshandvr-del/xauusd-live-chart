@@ -306,10 +306,12 @@
         var priceDelta = (dy / drag.h) * span;
         setPriceRange(drag.top + priceDelta, drag.bottom + priceDelta);
       } else {
-        // drag DOWN  => compress (zoom out) — same direction as TradingView
-        // drag UP    => expand  (zoom in)
-        var factor = Math.exp(dy / (drag.h * 0.45));
-        factor = Math.max(0.05, Math.min(20, factor));
+        // drag DOWN => zoom out, drag UP => zoom in (TradingView direction).
+        // The factor is always computed from the range captured on mousedown,
+        // never from the live range, so the gesture is absolutely stable and
+        // fully reversible: return the mouse to where it started and the chart
+        // returns exactly to where it was.
+        var factor = dragFactor(dy, drag.h);
         var center = (drag.top + drag.bottom) / 2;
         setPriceRange(
           center + (drag.top - center) * factor,
