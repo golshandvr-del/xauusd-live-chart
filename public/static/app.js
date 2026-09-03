@@ -485,7 +485,23 @@
 
     container.addEventListener('touchmove', function (e) {
       if (!touch) return;
-      if (touch.kind === 'drag' && e.touches.length === 1) {
+      if (touch.kind === 'pan' && e.touches.length === 1) {
+        var pt = e.touches[0];
+        var pdx = pt.clientX - touch.x0;
+        var pdy = pt.clientY - touch.y0;
+        if (!touch.decided) {
+          if (Math.abs(pdx) < 8 && Math.abs(pdy) < 8) return;  // still ambiguous
+          touch.decided = true;
+          // vertical intent only when the finger travels mostly up/down
+          touch.vertical = Math.abs(pdy) > Math.abs(pdx) * 1.2;
+        }
+        if (!touch.vertical) return;      // horizontal swipe -> leave to the lib
+        var pspan = touch.top - touch.bottom;
+        var pdelta = (pdy / touch.h) * pspan;
+        setPriceRange(touch.top + pdelta, touch.bottom + pdelta);
+        e.preventDefault();               // we own this gesture now
+        e.stopPropagation();
+      } else if (touch.kind === 'drag' && e.touches.length === 1) {
         var dy = e.touches[0].clientY - touch.y0;
         var factor = dragFactor(dy, touch.h);
         var center = (touch.top + touch.bottom) / 2;
