@@ -142,6 +142,17 @@
     // introspection handle for the automated checks (harmless in production)
     window.__xauTs = state.chart.timeScale();
 
+    // fade the "drag the price bar" hint away after a few seconds, and
+    // immediately once the user actually performs a vertical zoom
+    var hint = $('chart-hint');
+    if (hint) {
+      var killHint = function () { hint.classList.add('hide'); };
+      setTimeout(killHint, 6500);
+      el.addEventListener('mousedown', killHint, true);
+      el.addEventListener('touchstart', killHint, true);
+      el.addEventListener('wheel', killHint, { passive: true, capture: true });
+    }
+
     installVerticalZoom(el);
 
     window.addEventListener('resize', function () {
