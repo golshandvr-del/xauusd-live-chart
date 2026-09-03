@@ -179,15 +179,21 @@
     function paneHeight() {
       var h = container.clientHeight;
       if (!h) return 0;
-      // binary-search the lowest y that still maps to a finite price
-      var lo = 0, hi = h, probe;
-      if (state.series.coordinateToPrice(h) !== null) return h;
-      for (var i = 0; i < 12; i++) {
-        probe = (lo + hi) / 2;
-        if (state.series.coordinateToPrice(probe) !== null) lo = probe;
-        else hi = probe;
-      }
-      return Math.max(40, Math.round(lo));
+      // The chart canvas that paints the candles is the price pane; the time
+      // axis lives in its own canvas below it. coordinateToPrice() happily
+      // extrapolates past the pane, so probing it cannot find the edge —
+      // we read the real pane canvas instead.
+      try {
+        var tables = container.querySelectorAll('canvas');
+        var best = 0;
+        for (var i = 0; i < tables.length; i++) {
+          var r = tables[i].getBoundingClientRect();
+          // the price pane is the tallest canvas in the widget
+          if (r.height > best && r.height < h + 1) best = r.height;
+        }
+        if (best >= 40) return Math.round(best);
+      } catch (e) {}
+      return h;
     }
 
     /* ---- read the currently visible price range ---- */
