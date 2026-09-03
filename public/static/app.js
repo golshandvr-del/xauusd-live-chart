@@ -353,7 +353,11 @@
       if (!overAxis && !e.shiftKey) return;   // let the library do horizontal zoom
       var rect = container.getBoundingClientRect();
       var focus = state.series.coordinateToPrice(e.clientY - rect.top);
-      var factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+      // scale the step with the wheel delta so a trackpad flick and a mouse
+      // notch both feel right, but keep it bounded
+      var mag = Math.min(1, Math.abs(e.deltaY) / 120);
+      var step = 0.10 + 0.15 * mag;                  // 10%..25% per notch
+      var factor = e.deltaY > 0 ? (1 + step) : 1 / (1 + step);
       zoomBy(factor, focus);
       e.preventDefault();
       e.stopPropagation();
