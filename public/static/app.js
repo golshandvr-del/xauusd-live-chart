@@ -874,7 +874,17 @@
     document.addEventListener('keydown', function (e) {
       if (e.target && /input|textarea/i.test(e.target.tagName)) return;
       if (!window.__xauZoom) return;
-      if (e.key === 'ArrowUp') { window.__xauZoom.zoomBy(1 / 1.2); e.preventDefault(); }
+      var r;
+      // Shift + arrows = move the chart up/down (pan); plain arrows = zoom
+      if (e.key === 'ArrowUp' && e.shiftKey) {
+        r = window.__xauZoom.range();
+        if (r) window.__xauZoom.panBy(-(r.top - r.bottom) * 0.1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown' && e.shiftKey) {
+        r = window.__xauZoom.range();
+        if (r) window.__xauZoom.panBy((r.top - r.bottom) * 0.1);
+        e.preventDefault();
+      } else if (e.key === 'ArrowUp') { window.__xauZoom.zoomBy(1 / 1.2); e.preventDefault(); }
       else if (e.key === 'ArrowDown') { window.__xauZoom.zoomBy(1.2); e.preventDefault(); }
       else if (e.key === '0') { window.__xauZoom.reset(); }
     });
