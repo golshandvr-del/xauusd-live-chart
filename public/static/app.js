@@ -170,15 +170,36 @@
       return clientX >= rect.right - priceScaleWidth;
     }
 
+    /* ---- height of the PRICE pane, not of the whole widget ----
+       container.clientHeight also covers the time axis (~28px). Feeding that
+       into coordinateToPrice() reads a price BELOW the pane, so every gesture
+       measured a range wider than reality and the error compounded on each
+       interaction until the chart collapsed. We measure the real pane height
+       by probing where the price mapping stays linear. */
+    function paneHeight() {
+      var h = container.clientHeight;
+      if (!h) return 0;
+      // binary-search the lowest y that still maps to a finite price
+      var lo = 0, hi = h, probe;
+      if (state.series.coordinateToPrice(h) !== null) return h;
+      for (var i = 0; i < 12; i++) {
+        probe = (lo + hi) / 2;
+        if (state.series.coordinateToPrice(probe) !== null) lo = probe;
+        else hi = probe;
+      }
+      return Math.max(40, Math.round(lo));
+    }
+
     /* ---- read the currently visible price range ---- */
     function visibleRange() {
-      var h = container.clientHeight;
+      var h = paneHeight();
       if (!h) return null;
       var top = state.series.coordinateToPrice(0);
       var bottom = state.series.coordinateToPrice(h);
       if (top === null || bottom === null) return null;
       if (!isFinite(top) || !isFinite(bottom)) return null;
-      return { top: Math.max(top, bottom), bottom: Math.min(top, bottom) };
+      if (top === bottom) return null;
+      return { top: Math.max(top, bottom), bottom: Math.min(top, bottom), h: h };
     }
 
     /* ---- apply an explicit price range ----
