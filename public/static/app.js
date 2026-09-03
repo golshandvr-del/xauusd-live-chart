@@ -433,7 +433,25 @@
     container.addEventListener('touchstart', function (e) {
       if (e.touches.length === 1) {
         var t = e.touches[0];
-        if (!inPriceAxis(t.clientX)) return;
+        if (!inPriceAxis(t.clientX)) {
+          // one finger on the chart BODY: pan. The horizontal component keeps
+          // going to the library; we own the vertical component. The gesture
+          // only becomes a vertical pan once it is clearly more vertical than
+          // horizontal, so ordinary left/right scrolling is untouched.
+          var vrp = visibleRange();
+          if (!vrp) return;
+          touch = {
+            kind: 'pan',
+            x0: t.clientX,
+            y0: t.clientY,
+            top: vrp.top,
+            bottom: vrp.bottom,
+            h: vrp.h,
+            decided: false,
+            vertical: false
+          };
+          return;   // no preventDefault: the library still needs this touch
+        }
         var vr = visibleRange();
         if (!vr) return;
         touch = {
@@ -441,7 +459,7 @@
           y0: t.clientY,
           top: vr.top,
           bottom: vr.bottom,
-          h: container.clientHeight
+          h: vr.h
         };
         container.classList.add('vzoom');
         e.preventDefault();
