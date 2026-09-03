@@ -394,8 +394,7 @@
       if (!touch) return;
       if (touch.kind === 'drag' && e.touches.length === 1) {
         var dy = e.touches[0].clientY - touch.y0;
-        var factor = Math.exp(dy / (touch.h * 0.45));
-        factor = Math.max(0.05, Math.min(20, factor));
+        var factor = dragFactor(dy, touch.h);
         var center = (touch.top + touch.bottom) / 2;
         setPriceRange(
           center + (touch.top - center) * factor,
