@@ -555,6 +555,7 @@ app.get('/api/diag', async (c) => {
     }
   }
   const cs: Array<[string, () => Promise<Series>]> = [
+    ['FXOpen XAUUSD (spot)', () => fxopenCandles('1h', 50)],
     ['Yahoo XAUUSD=X', () => yahooCandles('1h', 'XAUUSD=X', 'yf spot', true)],
     ['Yahoo GC=F', () => yahooCandles('1h', 'GC=F', 'yf futures', true)],
     ['Bitget XAUT', () => bitgetCandles('1h', 50)],
