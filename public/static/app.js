@@ -288,7 +288,14 @@
       setPriceRange(vr.top + priceDelta, vr.bottom + priceDelta);
     }
 
-    window.__xauZoom = { zoomBy: zoomBy, panBy: panBy, reset: resetAuto };
+    window.__xauZoom = {
+      zoomBy: zoomBy,
+      panBy: panBy,
+      reset: resetAuto,
+      // read-only introspection used by the automated checks
+      range: visibleRange,
+      paneHeight: paneHeight
+    };
 
     /* ================= mouse drag on the price axis ================= */
     var drag = null;
